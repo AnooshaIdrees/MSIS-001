@@ -1,0 +1,72 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-test-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Install Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # Run tests
+      - name: Run Jest tests
+        run: npm test
+
+      # Install Snyk CLI
+      - name: Install Snyk
+        run: |
+          curl https://static.snyk.io/cli/latest/snyk-linux -o snyk
+          chmod +x snyk
+
+      # Auth with Snyk
+      - name: Authenticate Snyk
+        run: |
+          ./snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      # Run SAST security scan
+      - name: Snyk Code Test (SAST)
+        run: |
+          ./snyk code test --severity-threshold=medium
+
+  docker-build-push:
+    needs: build-test-scan
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Login to DockerHub
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_anooshamsis }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build Docker image
+      - name: Build Docker Image
+        run: |
+          docker build -t anooshamsis/msis-001:latest .
+
+      # Push Docker image
+      - name: Push Docker Image
+        run: |
+          docker push anooshamsis/msis-001:latest
